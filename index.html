@@ -15,7 +15,7 @@
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            padding: 1rem;
+            padding: 1.5rem;
             box-sizing: border-box;
         }
         .card {
@@ -24,29 +24,43 @@
             border-radius: 1rem;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             width: 100%;
-            max-width: 420px;
+            max-width: 540px;
         }
-        h2 {
-            margin-top: 0;
-            color: #38bdf8;
-            text-align: center;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-            color: #cbd5e1;
-        }
-        input {
+        h2 { margin-top: 0; color: #38bdf8; text-align: center; }
+        label { display: block; margin-bottom: 0.35rem; font-size: 0.85rem; color: #cbd5e1; font-weight: 500; }
+        input[type="text"], select {
             width: 100%;
-            padding: 0.75rem;
-            margin-bottom: 1.25rem;
+            padding: 0.65rem;
+            margin-bottom: 1rem;
             background: #0f172a;
             border: 1px solid #334155;
             color: #fff;
             border-radius: 0.5rem;
             box-sizing: border-box;
         }
+        .schedule-title {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.25rem;
+            font-size: 0.85rem;
+        }
+        th, td {
+            padding: 0.45rem;
+            text-align: center;
+            border-bottom: 1px solid #334155;
+        }
+        th { color: #38bdf8; font-weight: 500; }
+        td:first-child { text-align: left; font-weight: 500; }
+        input[type="checkbox"] { accent-color: #0284c7; cursor: pointer; transform: scale(1.15); }
         button {
             width: 100%;
             padding: 0.75rem;
@@ -58,14 +72,8 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        button:hover {
-            background: #0369a1;
-        }
-        #status {
-            margin-top: 1rem;
-            text-align: center;
-            font-size: 0.875rem;
-        }
+        button:hover { background: #0369a1; }
+        #status { margin-top: 1rem; text-align: center; font-size: 0.875rem; }
     </style>
 </head>
 <body>
@@ -74,20 +82,56 @@
         <form id="bookingForm">
             <label for="userid">SpaceBasic User ID</label>
             <input type="text" id="userid" placeholder="e.g. 380738" required>
-            
+
             <label for="tenant_id">Tenant ID</label>
             <input type="text" id="tenant_id" value="143" required>
-            
+
             <label for="bearer_token">Bearer Token</label>
             <input type="text" id="bearer_token" placeholder="Paste token without 'Bearer '" required>
-            
-            <button type="submit">Save & Enable Auto-Booking</button>
+
+            <label for="preference">Diet Preference</label>
+            <select id="preference" required>
+                <option value="veg" selected>Veg</option>
+                <option value="egg">Egg</option>
+                <option value="non-veg">Non-Veg</option>
+            </select>
+
+            <div class="schedule-title">Weekly Meal Selection</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Breakfast</th>
+                        <th>Lunch</th>
+                        <th>Dinner</th>
+                    </tr>
+                </thead>
+                <tbody id="scheduleBody">
+                    <!-- Generated via JS -->
+                </tbody>
+            </table>
+
+            <button type="submit">Save Settings & Enable Bot</button>
         </form>
         <div id="status"></div>
     </div>
 
     <script>
-        // Use ONLY your Project URL and public 'anon' key here
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        const tbody = document.getElementById("scheduleBody");
+
+        // Render table rows
+        days.forEach(day => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${day}</td>
+                <td><input type="checkbox" id="${day}-breakfast" checked></td>
+                <td><input type="checkbox" id="${day}-lunch" checked></td>
+                <td><input type="checkbox" id="${day}-dinner" checked></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
         const SUPABASE_URL = "https://imgmapetqgbwcmurhxgk.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltZ21hcGV0cWdid2NtdXJoeGdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMjM5NTMsImV4cCI6MjEwNDc5OTk1M30.LA1M6CPrwq7X2Rfhb9HadSXTiEuFcFalOXuDWcre_dY"; 
 
@@ -100,22 +144,37 @@
             const userid = document.getElementById('userid').value.trim();
             const tenant_id = document.getElementById('tenant_id').value.trim();
             const bearer_token = document.getElementById('bearer_token').value.trim().replace("Bearer ", "");
+            const preference = document.getElementById('preference').value;
+
+            // Build schedule object
+            const schedule = {};
+            days.forEach(day => {
+                schedule[day] = {
+                    breakfast: document.getElementById(`${day}-breakfast`).checked,
+                    lunch: document.getElementById(`${day}-lunch`).checked,
+                    dinner: document.getElementById(`${day}-dinner`).checked
+                };
+            });
 
             status.style.color = "#f8fafc";
-            status.innerText = "Registering user...";
+            status.innerText = "Saving preferences...";
 
             const { error } = await supabaseClient
                 .from('users')
-                .upsert({ userid, tenant_id, bearer_token }, { onConflict: 'userid' });
+                .upsert({ 
+                    userid, 
+                    tenant_id, 
+                    bearer_token, 
+                    preference, 
+                    schedule 
+                }, { onConflict: 'userid' });
 
             if (error) {
                 status.style.color = "#f87171";
                 status.innerText = "Error: " + error.message;
             } else {
                 status.style.color = "#4ade80";
-                status.innerText = "Success! Auto-booking details saved.";
-                document.getElementById('bookingForm').reset();
-                document.getElementById('tenant_id').value = "143";
+                status.innerText = "Success! Weekly schedule & preference saved.";
             }
         });
     </script>
